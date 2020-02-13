@@ -111,9 +111,16 @@ namespace ScratchPad
 
             builder
                 .StartWith<HelloWorld>()
+                .Then((context) =>
+                {
+                    Console.WriteLine("------1");
+                    Task.Delay(TimeSpan.FromSeconds(20)).Wait();
+                    Console.WriteLine("------2");
+                    return ExecutionResult.Next();
+                })
                 .Decide(data => data.Value1)
-                    .Branch("one", branch1)
-                    .Branch("two", branch2);
+                    .Branch((data, outcome) => data.Value1 == "one", branch1)
+                    .Branch((data, outcome) => data.Value1 == "two", branch2);
         }
 
         public string Id => "Test01";
