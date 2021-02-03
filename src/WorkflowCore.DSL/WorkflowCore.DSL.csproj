@@ -10,6 +10,7 @@
     <PackageProjectUrl>https://github.com/danielgerlag/workflow-core</PackageProjectUrl>
     <RepositoryUrl>https://github.com/danielgerlag/workflow-core.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <Configurations>Debug;Release;Debug Data ONLY</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
