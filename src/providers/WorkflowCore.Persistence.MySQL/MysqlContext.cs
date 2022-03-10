@@ -21,11 +21,12 @@ namespace WorkflowCore.Persistence.MySQL
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             base.OnConfiguring(optionsBuilder);
-#if NETSTANDARD2_0
-            optionsBuilder.UseMySql(_connectionString, _mysqlOptionsAction);
-#elif NETSTANDARD2_1_OR_GREATER
+            //#if NETSTANDARD2_0
+            //            optionsBuilder.UseMySql(_connectionString, _mysqlOptionsAction);
+            //#elif NETSTANDARD2_1_OR_GREATER
+            //            optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString), _mysqlOptionsAction);
+            //#endif
             optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString), _mysqlOptionsAction);
-#endif
         }
 
         protected override void ConfigureSubscriptionStorage(EntityTypeBuilder<PersistedSubscription> builder)
