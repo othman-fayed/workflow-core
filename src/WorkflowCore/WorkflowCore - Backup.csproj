@@ -2,6 +2,12 @@
 
 	<PropertyGroup>
 		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	
+	<!--<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
 		<AssemblyTitle>Workflow Core</AssemblyTitle>
 		<Authors>Daniel Gerlag</Authors>
 		<AssemblyName>WorkflowCore</AssemblyName>
@@ -11,7 +17,7 @@
 		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
 		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
 		<Description>Workflow Core is a light weight workflow engine targeting .NET Standard.</Description>
-	</PropertyGroup>
+	</PropertyGroup>-->
 
 	<ItemGroup>
 		<PackageReference Include="ConcurrentHashSet" Version="1.1.0" />
