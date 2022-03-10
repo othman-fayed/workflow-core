@@ -19,9 +19,9 @@
     <Configurations>Debug;Release;Debug Data ONLY</Configurations>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\WorkflowCore\WorkflowCore.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\WorkflowCore\WorkflowCore.csproj" />
+	</ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == 'net6.0' ">
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="7.*" />

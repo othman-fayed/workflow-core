@@ -1,18 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <AssemblyTitle>Workflow Core</AssemblyTitle>
-    <Authors>Daniel Gerlag</Authors>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <AssemblyName>WorkflowCore</AssemblyName>
-    <PackageId>WorkflowCore</PackageId>
-    <PackageTags>workflow;.NET;Core;state machine</PackageTags>
-    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
-    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
-    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
-    <Description>Workflow Core is a light weight workflow engine targeting .NET Standard.</Description>
-    <Configurations>Debug;Release;ReleaseDllOnly</Configurations>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<AssemblyTitle>Workflow Core</AssemblyTitle>
+		<Authors>Daniel Gerlag</Authors>
+		<AssemblyName>WorkflowCore</AssemblyName>
+		<PackageId>WorkflowCore</PackageId>
+		<PackageTags>workflow;.NET;Core;state machine</PackageTags>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<Description>Workflow Core is a light weight workflow engine targeting .NET Standard.</Description>
+	</PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="ConcurrentHashSet" Version="1.1.0" />
@@ -34,8 +33,8 @@
 	</AssemblyAttribute>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Services\DefinitionStorage\" />
-  </ItemGroup>
+	<ItemGroup>
+		<Folder Include="Services\DefinitionStorage\" />
+	</ItemGroup>
 
 </Project>
