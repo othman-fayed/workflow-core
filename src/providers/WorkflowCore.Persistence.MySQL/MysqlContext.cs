@@ -25,7 +25,6 @@ namespace WorkflowCore.Persistence.MySQL
             optionsBuilder.UseMySql(_connectionString, _mysqlOptionsAction);
 #elif NETSTANDARD2_1_OR_GREATER || NET6_0_OR_GREATER
             optionsBuilder.UseMySql(_connectionString, ServerVersion.AutoDetect(_connectionString), _mysqlOptionsAction);
-#endif
         }
 
         protected override void ConfigureSubscriptionStorage(EntityTypeBuilder<PersistedSubscription> builder)
