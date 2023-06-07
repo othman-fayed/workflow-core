@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "WorkflowCore.DSL": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:50777;http://localhost:50779"
+    }
+  }
+}
