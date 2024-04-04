@@ -2,7 +2,7 @@
 
 namespace WorkflowCore.Models
 {
-    public class ExecutionError
+	public class ExecutionError
 	{
 		public DateTime ErrorTime { get; set; }
 
@@ -12,4 +12,6 @@ namespace WorkflowCore.Models
 
 		public string Message { get; set; }
 	}
+
+	public class WorkflowNotRegisteredExecutionError : ExecutionError { }
 }
