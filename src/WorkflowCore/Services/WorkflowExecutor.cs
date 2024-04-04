@@ -12,266 +12,274 @@ using WorkflowCore.Models.LifeCycleEvents;
 
 namespace WorkflowCore.Services
 {
-    public class WorkflowExecutor : IWorkflowExecutor
-    {
-        protected readonly IWorkflowRegistry _registry;
-        protected readonly IServiceProvider _serviceProvider;
-        protected readonly IScopeProvider _scopeProvider;
-        protected readonly IDateTimeProvider _datetimeProvider;
-        protected readonly ILogger _logger;
-        private readonly IExecutionResultProcessor _executionResultProcessor;
-        private readonly ICancellationProcessor _cancellationProcessor;
-        private readonly ILifeCycleEventPublisher _publisher;
-        private readonly WorkflowOptions _options;
+	public class WorkflowExecutor : IWorkflowExecutor
+	{
+		protected readonly IWorkflowRegistry _registry;
+		protected readonly IServiceProvider _serviceProvider;
+		protected readonly IScopeProvider _scopeProvider;
+		protected readonly IDateTimeProvider _datetimeProvider;
+		protected readonly ILogger _logger;
+		private readonly IExecutionResultProcessor _executionResultProcessor;
+		private readonly ICancellationProcessor _cancellationProcessor;
+		private readonly ILifeCycleEventPublisher _publisher;
+		private readonly WorkflowOptions _options;
 
-        private IWorkflowHost Host => _serviceProvider.GetService<IWorkflowHost>();
+		private IWorkflowHost Host => _serviceProvider.GetService<IWorkflowHost>();
 
-        public WorkflowExecutor(IWorkflowRegistry registry, IServiceProvider serviceProvider, IScopeProvider scopeProvider, IDateTimeProvider datetimeProvider, IExecutionResultProcessor executionResultProcessor, ILifeCycleEventPublisher publisher, ICancellationProcessor cancellationProcessor, WorkflowOptions options, ILoggerFactory loggerFactory)
-        {
-            _serviceProvider = serviceProvider;
-            _scopeProvider = scopeProvider;
-            _registry = registry;
-            _datetimeProvider = datetimeProvider;
-            _publisher = publisher;
-            _cancellationProcessor = cancellationProcessor;
-            _options = options;
-            _logger = loggerFactory.CreateLogger<WorkflowExecutor>();
-            _executionResultProcessor = executionResultProcessor;
-        }
+		public WorkflowExecutor(IWorkflowRegistry registry, IServiceProvider serviceProvider, IScopeProvider scopeProvider, IDateTimeProvider datetimeProvider, IExecutionResultProcessor executionResultProcessor, ILifeCycleEventPublisher publisher, ICancellationProcessor cancellationProcessor, WorkflowOptions options, ILoggerFactory loggerFactory)
+		{
+			_serviceProvider = serviceProvider;
+			_scopeProvider = scopeProvider;
+			_registry = registry;
+			_datetimeProvider = datetimeProvider;
+			_publisher = publisher;
+			_cancellationProcessor = cancellationProcessor;
+			_options = options;
+			_logger = loggerFactory.CreateLogger<WorkflowExecutor>();
+			_executionResultProcessor = executionResultProcessor;
+		}
 
-        public async Task<WorkflowExecutorResult> Execute(WorkflowInstance workflow, CancellationToken cancellationToken = default)
-        {
-            var wfResult = new WorkflowExecutorResult();
+		public async Task<WorkflowExecutorResult> Execute(WorkflowInstance workflow, CancellationToken cancellationToken = default)
+		{
+			var wfResult = new WorkflowExecutorResult();
 
-            var exePointers = new List<ExecutionPointer>(workflow.ExecutionPointers.Where(x => x.Active && (!x.SleepUntil.HasValue || x.SleepUntil < _datetimeProvider.UtcNow)));
-            var def = _registry.GetDefinition(workflow.WorkflowDefinitionId, workflow.Version);
-            if (def == null)
-            {
-                _logger.LogError("Workflow {0} version {1} is not registered", workflow.WorkflowDefinitionId, workflow.Version);
-                return wfResult;
-            }
+			var exePointers = new List<ExecutionPointer>(workflow.ExecutionPointers.Where(x => x.Active && (!x.SleepUntil.HasValue || x.SleepUntil < _datetimeProvider.UtcNow)));
+			var def = _registry.GetDefinition(workflow.WorkflowDefinitionId, workflow.Version);
+			if (def == null)
+			{
+				_logger.LogError("Workflow {0} version {1} is not registered", workflow.WorkflowDefinitionId, workflow.Version);
+				// adding an error to the result, which is persisted to DB
+				wfResult.Errors.Add(new WorkflowNotRegisteredExecutionError
+				{
+					WorkflowId = workflow.Id,
+					ErrorTime = _datetimeProvider.UtcNow,
+					Message = $"Workflow {workflow.WorkflowDefinitionId} version {workflow.Version} is not registered"
+				});
 
-            _cancellationProcessor.ProcessCancellations(workflow, def, wfResult);
+				return wfResult;
+			}
 
-            foreach (var pointer in exePointers)
-            {
-                if (!pointer.Active)
-                    continue;
+			_cancellationProcessor.ProcessCancellations(workflow, def, wfResult);
 
-                var step = def.Steps.FindById(pointer.StepId);
-                if (step == null)
-                {
-                    _logger.LogError("Unable to find step {0} in workflow definition", pointer.StepId);
-                    pointer.SleepUntil = _datetimeProvider.UtcNow.Add(_options.ErrorRetryInterval);
-                    wfResult.Errors.Add(new ExecutionError
-                    {
-                        WorkflowId = workflow.Id,
-                        ExecutionPointerId = pointer.Id,
-                        ErrorTime = _datetimeProvider.UtcNow,
-                        Message = $"Unable to find step {pointer.StepId} in workflow definition"
-                    });
-                    continue;
-                }
+			foreach (var pointer in exePointers)
+			{
+				if (!pointer.Active)
+					continue;
 
-                try
-                {
-                    if (!InitializeStep(workflow, step, wfResult, def, pointer))
-                        continue;
+				var step = def.Steps.FindById(pointer.StepId);
+				if (step == null)
+				{
+					_logger.LogError("Unable to find step {0} in workflow definition", pointer.StepId);
+					pointer.SleepUntil = _datetimeProvider.UtcNow.Add(_options.ErrorRetryInterval);
+					wfResult.Errors.Add(new ExecutionError
+					{
+						WorkflowId = workflow.Id,
+						ExecutionPointerId = pointer.Id,
+						ErrorTime = _datetimeProvider.UtcNow,
+						Message = $"Unable to find step {pointer.StepId} in workflow definition"
+					});
+					continue;
+				}
 
-                    await ExecuteStep(workflow, step, pointer, wfResult, def, cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Workflow {0} raised error on step {1} Message: {2}", workflow.Id, pointer.StepId, ex.Message);
-                    wfResult.Errors.Add(new ExecutionError
-                    {
-                        WorkflowId = workflow.Id,
-                        ExecutionPointerId = pointer.Id,
-                        ErrorTime = _datetimeProvider.UtcNow,
-                        Message = ex.Message
-                    });
+				try
+				{
+					if (!InitializeStep(workflow, step, wfResult, def, pointer))
+						continue;
 
-                    _executionResultProcessor.HandleStepException(workflow, def, pointer, step, ex);
-                    Host.ReportStepError(workflow, step, ex);
-                }
-                _cancellationProcessor.ProcessCancellations(workflow, def, wfResult);
-            }
-            ProcessAfterExecutionIteration(workflow, def, wfResult);
-            await DetermineNextExecutionTime(workflow, def);
+					await ExecuteStep(workflow, step, pointer, wfResult, def, cancellationToken);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Workflow {0} raised error on step {1} Message: {2}", workflow.Id, pointer.StepId, ex.Message);
+					wfResult.Errors.Add(new ExecutionError
+					{
+						WorkflowId = workflow.Id,
+						ExecutionPointerId = pointer.Id,
+						ErrorTime = _datetimeProvider.UtcNow,
+						Message = ex.Message
+					});
 
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var middlewareRunner = scope.ServiceProvider.GetRequiredService<IWorkflowMiddlewareRunner>();
-                await middlewareRunner.RunExecuteMiddleware(workflow, def);
-            }
+					_executionResultProcessor.HandleStepException(workflow, def, pointer, step, ex);
+					Host.ReportStepError(workflow, step, ex);
+				}
+				_cancellationProcessor.ProcessCancellations(workflow, def, wfResult);
+			}
+			ProcessAfterExecutionIteration(workflow, def, wfResult);
+			await DetermineNextExecutionTime(workflow, def);
 
-            return wfResult;
-        }
+			using (var scope = _serviceProvider.CreateScope())
+			{
+				var middlewareRunner = scope.ServiceProvider.GetRequiredService<IWorkflowMiddlewareRunner>();
+				await middlewareRunner.RunExecuteMiddleware(workflow, def);
+			}
 
-        private bool InitializeStep(WorkflowInstance workflow, WorkflowStep step, WorkflowExecutorResult wfResult, WorkflowDefinition def, ExecutionPointer pointer)
-        {
-            switch (step.InitForExecution(wfResult, def, workflow, pointer))
-            {
-                case ExecutionPipelineDirective.Defer:
-                    return false;
-                case ExecutionPipelineDirective.EndWorkflow:
-                    workflow.Status = WorkflowStatus.Complete;
-                    workflow.CompleteTime = _datetimeProvider.UtcNow;
-                    return false;
-            }
+			return wfResult;
+		}
 
-            if (pointer.Status != PointerStatus.Running)
-            {
-                pointer.Status = PointerStatus.Running;
-                _publisher.PublishNotification(new StepStarted
-                {
-                    EventTimeUtc = _datetimeProvider.UtcNow,
-                    Reference = workflow.Reference,
-                    ExecutionPointerId = pointer.Id,
-                    StepId = step.Id,
-                    WorkflowInstanceId = workflow.Id,
-                    WorkflowDefinitionId = workflow.WorkflowDefinitionId,
-                    Version = workflow.Version
-                });
-            }
+		private bool InitializeStep(WorkflowInstance workflow, WorkflowStep step, WorkflowExecutorResult wfResult, WorkflowDefinition def, ExecutionPointer pointer)
+		{
+			switch (step.InitForExecution(wfResult, def, workflow, pointer))
+			{
+				case ExecutionPipelineDirective.Defer:
+					return false;
+				case ExecutionPipelineDirective.EndWorkflow:
+					workflow.Status = WorkflowStatus.Complete;
+					workflow.CompleteTime = _datetimeProvider.UtcNow;
+					return false;
+			}
 
-            if (!pointer.StartTime.HasValue)
-            {
-                pointer.StartTime = _datetimeProvider.UtcNow;
-            }
+			if (pointer.Status != PointerStatus.Running)
+			{
+				pointer.Status = PointerStatus.Running;
+				_publisher.PublishNotification(new StepStarted
+				{
+					EventTimeUtc = _datetimeProvider.UtcNow,
+					Reference = workflow.Reference,
+					ExecutionPointerId = pointer.Id,
+					StepId = step.Id,
+					WorkflowInstanceId = workflow.Id,
+					WorkflowDefinitionId = workflow.WorkflowDefinitionId,
+					Version = workflow.Version
+				});
+			}
 
-            return true;
-        }
+			if (!pointer.StartTime.HasValue)
+			{
+				pointer.StartTime = _datetimeProvider.UtcNow;
+			}
 
-        private async Task ExecuteStep(WorkflowInstance workflow, WorkflowStep step, ExecutionPointer pointer, WorkflowExecutorResult wfResult, WorkflowDefinition def, CancellationToken cancellationToken = default)
-        {
-            IStepExecutionContext context = new StepExecutionContext
-            {
-                Workflow = workflow,
-                Step = step,
-                PersistenceData = pointer.PersistenceData,
-                ExecutionPointer = pointer,
-                Item = pointer.ContextItem,
-                CancellationToken = cancellationToken
-            };
+			return true;
+		}
 
-            using (var scope = _scopeProvider.CreateScope(context))
-            {
-                _logger.LogDebug("Starting step {0} on workflow {1}", step.Name, workflow.Id);
+		private async Task ExecuteStep(WorkflowInstance workflow, WorkflowStep step, ExecutionPointer pointer, WorkflowExecutorResult wfResult, WorkflowDefinition def, CancellationToken cancellationToken = default)
+		{
+			IStepExecutionContext context = new StepExecutionContext
+			{
+				Workflow = workflow,
+				Step = step,
+				PersistenceData = pointer.PersistenceData,
+				ExecutionPointer = pointer,
+				Item = pointer.ContextItem,
+				CancellationToken = cancellationToken
+			};
 
-                IStepBody body = step.ConstructBody(scope.ServiceProvider);
-                var stepExecutor = scope.ServiceProvider.GetRequiredService<IStepExecutor>();
+			using (var scope = _scopeProvider.CreateScope(context))
+			{
+				_logger.LogDebug("Starting step {0} on workflow {1}", step.Name, workflow.Id);
 
-                if (body == null)
-                {
-                    _logger.LogError("Unable to construct step body {0}", step.BodyType.ToString());
-                    pointer.SleepUntil = _datetimeProvider.UtcNow.Add(_options.ErrorRetryInterval);
-                    wfResult.Errors.Add(new ExecutionError
-                    {
-                        WorkflowId = workflow.Id,
-                        ExecutionPointerId = pointer.Id,
-                        ErrorTime = _datetimeProvider.UtcNow,
-                        Message = $"Unable to construct step body {step.BodyType}"
-                    });
-                    return;
-                }
+				IStepBody body = step.ConstructBody(scope.ServiceProvider);
+				var stepExecutor = scope.ServiceProvider.GetRequiredService<IStepExecutor>();
 
-                foreach (var input in step.Inputs)
-                    input.AssignInput(workflow.Data, body, context);
+				if (body == null)
+				{
+					_logger.LogError("Unable to construct step body {0}", step.BodyType.ToString());
+					pointer.SleepUntil = _datetimeProvider.UtcNow.Add(_options.ErrorRetryInterval);
+					wfResult.Errors.Add(new ExecutionError
+					{
+						WorkflowId = workflow.Id,
+						ExecutionPointerId = pointer.Id,
+						ErrorTime = _datetimeProvider.UtcNow,
+						Message = $"Unable to construct step body {step.BodyType}"
+					});
+					return;
+				}
 
-                switch (step.BeforeExecute(wfResult, context, pointer, body))
-                {
-                    case ExecutionPipelineDirective.Defer:
-                        return;
-                    case ExecutionPipelineDirective.EndWorkflow:
-                        workflow.Status = WorkflowStatus.Complete;
-                        workflow.CompleteTime = _datetimeProvider.UtcNow;
-                        return;
-                }
+				foreach (var input in step.Inputs)
+					input.AssignInput(workflow.Data, body, context);
 
-                var result = await stepExecutor.ExecuteStep(context, body);
+				switch (step.BeforeExecute(wfResult, context, pointer, body))
+				{
+					case ExecutionPipelineDirective.Defer:
+						return;
+					case ExecutionPipelineDirective.EndWorkflow:
+						workflow.Status = WorkflowStatus.Complete;
+						workflow.CompleteTime = _datetimeProvider.UtcNow;
+						return;
+				}
 
-                if (result.Proceed)
-                {
-                    foreach (var output in step.Outputs)
-                        output.AssignOutput(workflow.Data, body, context);
-                }
+				var result = await stepExecutor.ExecuteStep(context, body);
 
-                _executionResultProcessor.ProcessExecutionResult(workflow, def, pointer, step, result, wfResult);
-                step.AfterExecute(wfResult, context, result, pointer);
-            }
-        }
+				if (result.Proceed)
+				{
+					foreach (var output in step.Outputs)
+						output.AssignOutput(workflow.Data, body, context);
+				}
 
-        private void ProcessAfterExecutionIteration(WorkflowInstance workflow, WorkflowDefinition workflowDef, WorkflowExecutorResult workflowResult)
-        {
-            var pointers = workflow.ExecutionPointers.Where(x => x.EndTime == null);
+				_executionResultProcessor.ProcessExecutionResult(workflow, def, pointer, step, result, wfResult);
+				step.AfterExecute(wfResult, context, result, pointer);
+			}
+		}
 
-            foreach (var pointer in pointers)
-            {
-                var step = workflowDef.Steps.FindById(pointer.StepId);
-                step?.AfterWorkflowIteration(workflowResult, workflowDef, workflow, pointer);
-            }
-        }
+		private void ProcessAfterExecutionIteration(WorkflowInstance workflow, WorkflowDefinition workflowDef, WorkflowExecutorResult workflowResult)
+		{
+			var pointers = workflow.ExecutionPointers.Where(x => x.EndTime == null);
 
-        private async Task DetermineNextExecutionTime(WorkflowInstance workflow, WorkflowDefinition def)
-        {
-            //TODO: move to own class
-            workflow.NextExecution = null;
+			foreach (var pointer in pointers)
+			{
+				var step = workflowDef.Steps.FindById(pointer.StepId);
+				step?.AfterWorkflowIteration(workflowResult, workflowDef, workflow, pointer);
+			}
+		}
 
-            if (workflow.Status == WorkflowStatus.Complete)
-            {
-                return;
-            }
+		private async Task DetermineNextExecutionTime(WorkflowInstance workflow, WorkflowDefinition def)
+		{
+			//TODO: move to own class
+			workflow.NextExecution = null;
 
-            foreach (var pointer in workflow.ExecutionPointers.Where(x => x.Active && (x.Children ?? new List<string>()).Count == 0))
-            {
-                if (!pointer.SleepUntil.HasValue)
-                {
-                    workflow.NextExecution = 0;
-                    return;
-                }
+			if (workflow.Status == WorkflowStatus.Complete)
+			{
+				return;
+			}
 
-                var pointerSleep = pointer.SleepUntil.Value.ToUniversalTime().Ticks;
-                workflow.NextExecution = Math.Min(pointerSleep, workflow.NextExecution ?? pointerSleep);
-            }
+			foreach (var pointer in workflow.ExecutionPointers.Where(x => x.Active && (x.Children ?? new List<string>()).Count == 0))
+			{
+				if (!pointer.SleepUntil.HasValue)
+				{
+					workflow.NextExecution = 0;
+					return;
+				}
 
-            foreach (var pointer in workflow.ExecutionPointers.Where(x => x.Active && (x.Children ?? new List<string>()).Count > 0))
-            {
-                if (!workflow.ExecutionPointers.FindByScope(pointer.Id).All(x => x.EndTime.HasValue))
-                    continue;
+				var pointerSleep = pointer.SleepUntil.Value.ToUniversalTime().Ticks;
+				workflow.NextExecution = Math.Min(pointerSleep, workflow.NextExecution ?? pointerSleep);
+			}
 
-                if (!pointer.SleepUntil.HasValue)
-                {
-                    workflow.NextExecution = 0;
-                    return;
-                }
+			foreach (var pointer in workflow.ExecutionPointers.Where(x => x.Active && (x.Children ?? new List<string>()).Count > 0))
+			{
+				if (!workflow.ExecutionPointers.FindByScope(pointer.Id).All(x => x.EndTime.HasValue))
+					continue;
 
-                var pointerSleep = pointer.SleepUntil.Value.ToUniversalTime().Ticks;
-                workflow.NextExecution = Math.Min(pointerSleep, workflow.NextExecution ?? pointerSleep);
-            }
+				if (!pointer.SleepUntil.HasValue)
+				{
+					workflow.NextExecution = 0;
+					return;
+				}
 
-            if ((workflow.NextExecution != null) || (workflow.ExecutionPointers.Any(x => x.EndTime == null)))
-            {
-                return;
-            }
+				var pointerSleep = pointer.SleepUntil.Value.ToUniversalTime().Ticks;
+				workflow.NextExecution = Math.Min(pointerSleep, workflow.NextExecution ?? pointerSleep);
+			}
 
-            workflow.Status = WorkflowStatus.Complete;
-            workflow.CompleteTime = _datetimeProvider.UtcNow;
+			if ((workflow.NextExecution != null) || (workflow.ExecutionPointers.Any(x => x.EndTime == null)))
+			{
+				return;
+			}
 
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var middlewareRunner = scope.ServiceProvider.GetRequiredService<IWorkflowMiddlewareRunner>();
-                await middlewareRunner.RunPostMiddleware(workflow, def);
-            }
+			workflow.Status = WorkflowStatus.Complete;
+			workflow.CompleteTime = _datetimeProvider.UtcNow;
 
-            _publisher.PublishNotification(new WorkflowCompleted
-            {
-                EventTimeUtc = _datetimeProvider.UtcNow,
-                Reference = workflow.Reference,
-                WorkflowInstanceId = workflow.Id,
-                WorkflowDefinitionId = workflow.WorkflowDefinitionId,
-                Version = workflow.Version
-            });
-        }
-    }
+			using (var scope = _serviceProvider.CreateScope())
+			{
+				var middlewareRunner = scope.ServiceProvider.GetRequiredService<IWorkflowMiddlewareRunner>();
+				await middlewareRunner.RunPostMiddleware(workflow, def);
+			}
+
+			_publisher.PublishNotification(new WorkflowCompleted
+			{
+				EventTimeUtc = _datetimeProvider.UtcNow,
+				Reference = workflow.Reference,
+				WorkflowInstanceId = workflow.Id,
+				WorkflowDefinitionId = workflow.WorkflowDefinitionId,
+				Version = workflow.Version
+			});
+		}
+	}
 }
