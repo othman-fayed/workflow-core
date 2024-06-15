@@ -1,6 +1,4 @@
-﻿using System;
-using System.Linq;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using WorkflowCore.Persistence.EntityFramework.Models;
 using WorkflowCore.Persistence.EntityFramework.Services;
@@ -16,11 +14,15 @@ namespace WorkflowCore.Persistence.SqlServer
         {
             _connectionString = connectionString;
         }
-        
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             base.OnConfiguring(optionsBuilder);
+#if NET8_0_OR_GREATER
+                optionsBuilder.UseSqlServer(_connectionString, o => o.UseCompatibilityLevel(110));
+#else
             optionsBuilder.UseSqlServer(_connectionString);
+#endif
         }
 
         protected override void ConfigureSubscriptionStorage(EntityTypeBuilder<PersistedSubscription> builder)
@@ -34,7 +36,7 @@ namespace WorkflowCore.Persistence.SqlServer
             builder.ToTable("Workflow", "wfc");
             builder.Property(x => x.PersistenceId).UseIdentityColumn();
         }
-        
+
         protected override void ConfigureExecutionPointerStorage(EntityTypeBuilder<PersistedExecutionPointer> builder)
         {
             builder.ToTable("ExecutionPointer", "wfc");
