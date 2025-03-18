@@ -139,7 +139,25 @@ namespace WorkflowCore.Persistence.EntityFramework
         internal static WorkflowInstance ToWorkflowInstance(this PersistedWorkflow instance)
         {
             WorkflowInstance result = new WorkflowInstance();
-            result.Data = JsonConvert.DeserializeObject(instance.Data, SerializerSettings);
+            try
+            {
+                result.Data = JsonConvert.DeserializeObject(instance.Data, SerializerSettings);
+            }
+            catch (global::System.Exception e)
+            {
+                if (instance.Data.Contains("DynamicClass"))
+                {
+                    //DynamicClasses dynamicClasses = new DynamicClasses();
+                    result.Data = JsonConvert.DeserializeObject(instance.Data, new JsonSerializerSettings
+                    {
+                        TypeNameHandling = TypeNameHandling.None
+                    });
+                }
+                else
+                {
+                    throw;
+                }
+            }
             result.Description = instance.Description;
             result.Reference = instance.Reference;
             result.Id = instance.InstanceId.ToString();
