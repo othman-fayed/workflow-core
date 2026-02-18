@@ -22,7 +22,10 @@ namespace WorkflowCore.Persistence.PostgreSQL
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             base.OnConfiguring(optionsBuilder);
-            optionsBuilder.UseNpgsql(_connectionString);
+            optionsBuilder.UseNpgsql(_connectionString, x =>
+			{
+				x.MigrationsHistoryTable("__EFMigrationsHistory", _schemaName);
+			});
         }
 
         protected override void ConfigureSubscriptionStorage(EntityTypeBuilder<PersistedSubscription> builder)
