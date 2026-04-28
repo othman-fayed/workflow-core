@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="SharpYaml" Version="3.7.0" />
+    <PackageReference Include="SharpYaml" Version="3.7.1" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.2" />
     <PackageReference Include="YamlDotNet" Version="17.0.1" />
   </ItemGroup>
