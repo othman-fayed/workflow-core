@@ -13,9 +13,9 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="SharpYaml" Version="3.7.1" />
+    <PackageReference Include="SharpYaml" Version="3.8.0" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.2" />
-    <PackageReference Include="YamlDotNet" Version="17.1.0" />
+    <PackageReference Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
 
 	<ItemGroup>
